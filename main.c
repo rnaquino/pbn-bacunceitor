@@ -48,8 +48,8 @@ Img in, out;
 
 // Protótipos
 void load(char* name, Img* pic);
-void embaralhar(const Img *entrada, Img *saida, int limite);
-void recuperar(const Img *entrada, Img *saida, int limite);
+void embaralhar(const Img *entrada, Img *saida, int limite, int iteracoes);
+void recuperar(const Img *entrada, Img *saida, int limite, int iteracoes);
 
 int main(int argc, char* argv[]) {
   if (argc < 2) {
@@ -80,12 +80,13 @@ int main(int argc, char* argv[]) {
   // 0 = embaralhar 
   // 1 = recuperar
   int modo = 0;
-  int limite = 50;
+  int limite = 128;
+  int iteracoes = 8;
 
   if (modo == 0) {
-    embaralhar(&in, &out, limite);
+    embaralhar(&in, &out, limite, iteracoes);
   } else {
-    recuperar(&in, &out, limite);
+    recuperar(&in, &out, limite, iteracoes);
   }
 
   // Grava a imagem como PNG para registro
@@ -113,49 +114,58 @@ void load(char* name, Img* pic) {
   }
 }
 
-void embaralhar(const Img *entrada, Img *saida, int limite) {
+void embaralhar(const Img *entrada, Img *saida, int limite, int iteracoes) {
+  if (limite <= 0 || iteracoes <= 0) {
+    printf("Limite e número de iterações devem ser maiores que 0.\n");
+    exit(1);
+  }
+
   int largura = entrada->width;
   int altura = entrada->height;
-
-  Pixel *temporario = malloc(
-      sizeof(*temporario) * largura * altura
-  );
-
   int periodo = limite > 1 ? 2 * (limite - 1) : 1;
 
-  for (int etapa = 0; etapa < 2; etapa++) {
-    // Primeiro linhas, depois colunas
-    int moverLinhas = etapa == 0;
+  // Copia a entrada para a saída
+  const Pixel *origem = entrada->pixels;
+  Pixel *destino = saida->pixels;
 
-    const Pixel *origem =
-        etapa == 0 ? entrada->pixels : temporario;
+  for (int linha = 0; linha < altura; linha++) {
+    for (int coluna = 0; coluna < largura; coluna++) {
+      *destino = *origem;
+      origem++;
+      destino++;
+    }
+  }
 
-    Pixel *destino =
-        etapa == 0 ? temporario : saida->pixels;
+  Pixel *temporario = malloc(sizeof(*temporario) * largura * altura);
 
-    int totalFaixas = moverLinhas ? altura : largura;
-    int comprimento = moverLinhas ? largura : altura;
-    int passo = moverLinhas ? 1 : largura;
+  for (int repeticao = 0; repeticao < iteracoes; repeticao++) {
+    // Desloca as linhas para a direita
+    for (int linha = 0; linha < altura; linha++) {
+      int movimento = 1 + abs(linha % periodo - (limite - 1));
+      int deslocamento = movimento % largura;
 
-    for (int faixa = 0; faixa < totalFaixas; faixa++) {
-      int inicio = moverLinhas ? faixa * largura : faixa;
+      const Pixel *origemLinha = saida->pixels + linha * largura;
+      Pixel *destinoLinha = temporario + linha * largura;
 
-      int posicao = faixa % periodo;
-      int movimento;
+      for (int coluna = 0; coluna < largura; coluna++) {
+        int novaColuna = (coluna + deslocamento) % largura;
 
-      if (posicao < limite) {
-        movimento = limite - posicao;
-      } else {
-        movimento = posicao - limite + 2;
+        *(destinoLinha + novaColuna) = *(origemLinha + coluna);
       }
+    }
 
-      int deslocamento = movimento % comprimento;
+    // Desloca as colunas para baixo
+    for (int coluna = 0; coluna < largura; coluna++) {
+      int movimento = 1 + abs(coluna % periodo - (limite - 1));
+      int deslocamento = movimento % altura;
 
-      for (int i = 0; i < comprimento; i++) {
-        int novaPosicao = (i + deslocamento) % comprimento;
+      const Pixel *origemColuna = temporario + coluna;
+      Pixel *destinoColuna = saida->pixels + coluna;
 
-        destino[inicio + novaPosicao * passo] =
-            origem[inicio + i * passo];
+      for (int linha = 0; linha < altura; linha++) {
+        int novaLinha = (linha + deslocamento) % altura;
+
+        *(destinoColuna + novaLinha * largura) = *(origemColuna + linha * largura);
       }
     }
   }
@@ -163,53 +173,62 @@ void embaralhar(const Img *entrada, Img *saida, int limite) {
   free(temporario);
 }
 
-void recuperar(const Img *entrada, Img *saida, int limite) {
+void recuperar(const Img *entrada, Img *saida, int limite, int iteracoes) {
+  if (limite <= 0 || iteracoes <= 0) {
+    printf("Limite e número de iterações devem ser maiores que 0.\n");
+    exit(1);
+  }
+
   int largura = entrada->width;
   int altura = entrada->height;
+  int periodo = 2 * (limite - 1);
+
+  // Copia a entrada para a saída
+  if (entrada->pixels != saida->pixels) {
+    const Pixel *origem = entrada->pixels;
+    Pixel *destino = saida->pixels;
+
+    for (int linha = 0; linha < altura; linha++) {
+      for (int coluna = 0; coluna < largura; coluna++) {
+        *destino = *origem;
+        origem++;
+        destino++;
+      }
+    }
+  }
 
   Pixel *temporario = malloc(
       sizeof(*temporario) * largura * altura
   );
 
-  int periodo = limite > 1 ? 2 * (limite - 1) : 1;
+  for (int repeticao = 0; repeticao < iteracoes; repeticao++) {
+    // Desfaz o deslocamento das colunas
+    for (int coluna = 0; coluna < largura; coluna++) {
+      int movimento = 1 + abs(coluna % periodo - (limite - 1));
+      int deslocamento = movimento % altura;
 
-  for (int etapa = 0; etapa < 2; etapa++) {
-    // Primeiro desfaz as colunas, depois as linhas
-    int moverLinhas = etapa == 1;
+      const Pixel *origemColuna = saida->pixels + coluna;
+      Pixel *destinoColuna = temporario + coluna;
 
-    const Pixel *origem =
-        etapa == 0 ? entrada->pixels : temporario;
+      for (int linha = 0; linha < altura; linha++) {
+        int linhaDeslocada = (linha + deslocamento) % altura;
 
-    Pixel *destino =
-        etapa == 0 ? temporario : saida->pixels;
-
-    int totalFaixas = moverLinhas ? altura : largura;
-    int comprimento = moverLinhas ? largura : altura;
-    int passo = moverLinhas ? 1 : largura;
-
-    for (int faixa = 0; faixa < totalFaixas; faixa++) {
-      int inicio = moverLinhas ? faixa * largura : faixa;
-
-      int posicao = faixa % periodo;
-      int movimento;
-
-      if (posicao < limite) {
-        movimento = limite - posicao;
-      } else {
-        movimento = posicao - limite + 2;
+        *(destinoColuna + linha * largura) = *(origemColuna + linhaDeslocada * largura);
       }
+    }
 
-      int deslocamento = movimento % comprimento;
+    // Desfaz o deslocamento das linhas
+    for (int linha = 0; linha < altura; linha++) {
+      int movimento = 1 + abs(linha % periodo - (limite - 1));
+      int deslocamento = movimento % largura;
 
-      // Inverte o sentido do movimento
-      deslocamento =
-          (comprimento - deslocamento) % comprimento;
+      const Pixel *origemLinha = temporario + linha * largura;
+      Pixel *destinoLinha = saida->pixels + linha * largura;
 
-      for (int i = 0; i < comprimento; i++) {
-        int novaPosicao = (i + deslocamento) % comprimento;
+      for (int coluna = 0; coluna < largura; coluna++) {
+        int colunaDeslocada = (coluna + deslocamento) % largura;
 
-        destino[inicio + novaPosicao * passo] =
-            origem[inicio + i * passo];
+        *(destinoLinha + coluna) = *(origemLinha + colunaDeslocada);
       }
     }
   }
