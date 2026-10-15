@@ -46,10 +46,17 @@ typedef struct {
 // As 2 imagens
 Img in, out;
 
+// [CONFUSAO] Chave secreta (semente do gerador de números)
+#define CHAVE_CONFUSAO 0xC0FFEE42u
+
 // Protótipos
 void load(char* name, Img* pic);
 void embaralhar(const Img *entrada, Img *saida, int limite, int iteracoes);
 void recuperar(const Img *entrada, Img *saida, int limite, int iteracoes);
+// [CONFUSAO] protótipos
+void confundir(const Img* entrada, Img* saida, unsigned int chave);
+void desconfundir(const Img* entrada, Img* saida, unsigned int chave);
+
 
 int main(int argc, char* argv[]) {
   if (argc < 2) {
@@ -75,18 +82,37 @@ int main(int argc, char* argv[]) {
   Pixel(*pin)[in.width] = (Pixel(*)[in.height])in.pixels;
   Pixel(*pout)[in.width] = (Pixel(*)[in.height])out.pixels;
 
-  // Algoritmo de difusao
-
+  
   // 0 = embaralhar 
   // 1 = recuperar
   int modo = 0;
+  
+  // [CONFUSAO] imagem intermediária entre confusão e difusão
+  Img meio = in;
+  meio.pixels = malloc(tam * sizeof(Pixel));
+  memset(meio.pixels, 0, tam * sizeof(Pixel));
+
+  // [DIFUSAO] tamanho da piramide e numero de repeticoes
   int limite = 128;
   int iteracoes = 8;
 
+  // [CONFUSAO] teste: C seguido de C^-1 deve devolver a imagem original
   if (modo == 0) {
-    embaralhar(&in, &out, limite, iteracoes);
+    Img teste = in;
+    teste.pixels = malloc(tam * sizeof(Pixel));
+    confundir(&in, &meio, CHAVE_CONFUSAO);
+    desconfundir(&meio, &teste, CHAVE_CONFUSAO);
+    printf("Confusao reversivel: %s\n",
+           memcmp(in.pixels, teste.pixels, tam * sizeof(Pixel)) == 0 ? "SIM" : "NAO");
+    free(teste.pixels);
+  }
+
+  if (modo == 0) {
+    confundir(&in, &meio, CHAVE_CONFUSAO);
+    embaralhar(&meio, &out, limite, iteracoes);
   } else {
-    recuperar(&in, &out, limite, iteracoes);
+    recuperar(&in, &meio, limite, iteracoes);
+    desconfundir(&meio, &out, CHAVE_CONFUSAO);
   }
 
   // Grava a imagem como PNG para registro
@@ -94,6 +120,7 @@ int main(int argc, char* argv[]) {
 
   free(in.pixels);
   free(out.pixels);
+  free(meio.pixels);
 }
 
 void load(char* name, Img* pic) {
@@ -114,6 +141,11 @@ void load(char* name, Img* pic) {
   }
 }
 
+// ---
+// DIFUSAO
+// Empurra as linhas da imagem para a direita
+// e colunas para baixo formando uma sequencia de piramides
+// ---
 void embaralhar(const Img *entrada, Img *saida, int limite, int iteracoes) {
   if (limite <= 0 || iteracoes <= 0) {
     printf("Limite e número de iterações devem ser maiores que 0.\n");
@@ -234,4 +266,71 @@ void recuperar(const Img *entrada, Img *saida, int limite, int iteracoes) {
   }
 
   free(temporario);
+}
+
+
+// =====================================================================
+// [CONFUSAO] Substituição de valores dos bytes
+// Para cada byte b: v = (b + k1) mod 256; v = rotaciona v g bits à
+// esquerda; c = v XOR k2. k1, k2 e g vêm de um LCG iniciado pela chave.
+// =====================================================================
+
+static unsigned char rol8(unsigned char v, int n) {
+  n &= 7;
+  return (unsigned char)((v << n) | (v >> ((8 - n) & 7)));
+}
+
+static unsigned char ror8(unsigned char v, int n) {
+  return rol8(v, 8 - (n & 7));
+}
+
+// Tem que ser idêntica na ida e na volta
+static void proximaChave(unsigned int* estado, unsigned char* k1,
+                         unsigned char* k2, int* giro) {
+  *estado = *estado * 1664525u + 1013904223u;
+  *k1 = (unsigned char)(*estado >> 24);
+  *k2 = (unsigned char)(*estado >> 16);
+  *giro = (int)((*estado >> 8) & 7u);
+}
+
+void confundir(const Img* entrada, Img* saida, unsigned int chave) {
+  size_t total = (size_t)entrada->width * entrada->height * 3;
+  const unsigned char* src = (const unsigned char*)entrada->pixels;
+  unsigned char* dst = (unsigned char*)saida->pixels;
+  const unsigned char* fim = src + total;
+  unsigned int estado = chave;
+
+  while (src < fim) {
+    unsigned char k1, k2;
+    int giro;
+    proximaChave(&estado, &k1, &k2, &giro);
+
+    unsigned char v = (unsigned char)(*src + k1);  // soma mod 256
+    v = rol8(v, giro);                             // rotação
+    *dst = (unsigned char)(v ^ k2);                // XOR
+
+    src++;
+    dst++;
+  }
+}
+
+void desconfundir(const Img* entrada, Img* saida, unsigned int chave) {
+  size_t total = (size_t)entrada->width * entrada->height * 3;
+  const unsigned char* src = (const unsigned char*)entrada->pixels;
+  unsigned char* dst = (unsigned char*)saida->pixels;
+  const unsigned char* fim = src + total;
+  unsigned int estado = chave;
+
+  while (src < fim) {
+    unsigned char k1, k2;
+    int giro;
+    proximaChave(&estado, &k1, &k2, &giro);
+
+    unsigned char v = (unsigned char)(*src ^ k2);  // desfaz o XOR
+    v = ror8(v, giro);                             // desfaz a rotação
+    *dst = (unsigned char)(v - k1);                // desfaz a soma
+
+    src++;
+    dst++;
+  }
 }
