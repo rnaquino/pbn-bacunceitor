@@ -93,8 +93,8 @@ int main(int argc, char* argv[]) {
   memset(meio.pixels, 0, tam * sizeof(Pixel));
 
   // [DIFUSAO] tamanho da piramide e numero de repeticoes
-  int limite = 1;
-  int iteracoes = 1;
+  int limite = 128;
+  int iteracoes = 8;
 
   // [CONFUSAO] teste: C seguido de C^-1 deve devolver a imagem original
   if (modo == 0) {
@@ -154,7 +154,7 @@ void embaralhar(const Img *entrada, Img *saida, int limite, int iteracoes) {
 
   int largura = entrada->width;
   int altura = entrada->height;
-  int periodo = limite > 1 ? 2 * (limite - 1) : 1;
+  int periodo = 2 * (limite - 1);
 
   // Copia a entrada para a saída
   const Pixel *origem = entrada->pixels;

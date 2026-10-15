@@ -81,7 +81,7 @@ int main(int argc, char* argv[]) {
   int modo = 0;
 
   // [DIFUSAO] tamanho da piramide e numero de repeticoes
-  int limite = 64;
+  int limite = 128;
   int iteracoes = 8;
 
   if (modo == 0) {
@@ -128,7 +128,7 @@ void embaralhar(const Img *entrada, Img *saida, int limite, int iteracoes) {
 
   int largura = entrada->width;
   int altura = entrada->height;
-  int periodo = limite > 1 ? 2 * (limite - 1) : 1;
+  int periodo =  2 * (limite - 1);
 
   // Copia a entrada para a saída
   const Pixel *origem = entrada->pixels;
@@ -187,7 +187,7 @@ void recuperar(const Img *entrada, Img *saida, int limite, int iteracoes) {
 
   int largura = entrada->width;
   int altura = entrada->height;
-  int periodo = limite > 1 ? 2 * (limite - 1) : 1;
+  int periodo = 2 * (limite - 1);
 
   // Copia a entrada para a saída
   if (entrada->pixels != saida->pixels) {
