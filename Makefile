@@ -1,6 +1,6 @@
 # Makefile multiplataforma
 
-PROG = bagunceitor
+PROG = bagunceitor confusao difusao
 
 # Compilador
 CC = gcc
@@ -31,18 +31,21 @@ else
 endif
 
 # Fontes
-FONTES = main.c
+FONTES = main.c confusao.c difusao.c
 OBJ = $(FONTES:.c=.o)
 
 # Target (com extensao se necessario)
-TARGET = $(PROG)$(EXEEXT)
+TARGET = $(addsuffix $(EXEEXT),$(PROG))
 
 # Regras
 all: $(TARGET)
 	@echo "Build completado para $(OSNAME). Saida: $(TARGET)"
 
-$(TARGET): $(OBJ)
-	$(CC) $(CFLAGS) $(OBJ) -o $@ $(LDFLAGS) $(LIBS)
+bagunceitor$(EXEEXT): main.o
+	$(CC) $(CFLAGS) $< -o $@ $(LDFLAGS) $(LIBS)
+
+confusao$(EXEEXT) difusao$(EXEEXT): %$(EXEEXT): %.o
+	$(CC) $(CFLAGS) $< -o $@ $(LDFLAGS) $(LIBS)
 
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
